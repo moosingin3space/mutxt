@@ -18,7 +18,7 @@ use termion::terminal_size;
 
 use nix::sys::signal;
 
-const HELP_MSG: &'static str = "HELP: CTRL-O to open a file, CTRL-S to save the current file, and CTRL-Q to quit.";
+const HELP_MSG: &'static str = "HELP: CTRL-S to save the file, and CTRL-Q to quit.";
 #[allow(non_upper_case_globals)]
 static ShouldResizeWindow: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -80,7 +80,8 @@ fn main() {
                 render!(editor, stdout);
             },
             Key::Ctrl('s') => {
-                unimplemented!()
+                editor.save_file().expect("failed to save file");
+                render!(editor, stdout);
             },
             Key::Ctrl('o') => {
                 unimplemented!()
@@ -101,9 +102,15 @@ fn main() {
                 render!(editor, stdout);
             },
             Key::Ctrl('q') => break,
-            _ => {
-                // TODO insert the char
-            }
+            Key::Char('\n') => {
+                editor.newline();
+                render!(editor, stdout);
+            },
+            Key::Char(c) => {
+                editor.insert_char(c);
+                render!(editor, stdout);
+            },
+            _ => {}
         }
         if ShouldResizeWindow.compare_and_swap(true, false, Ordering::Relaxed) {
             let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");

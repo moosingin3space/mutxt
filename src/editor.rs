@@ -5,7 +5,6 @@ use std::io::{BufRead, BufReader};
 use std::fs::{File, OpenOptions};
 use syntax_highlight::{HighlightParams, HighlightType};
 use termion::{cursor, clear, color, style};
-use termion::raw::IntoRawMode;
 
 const TAB: char = '\t';
 const SPACES_PER_TAB: usize = 4;
@@ -36,6 +35,20 @@ impl Row {
         }
     }
 
+    pub fn with_content(content: &str) -> Self {
+        Row {
+            index_in_file: 0,
+            content: content.to_owned(),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Row {
+            index_in_file: 0,
+            content: String::new(),
+        }
+    }
+
     pub fn render(&self) -> RenderedRow {
         self.content.chars()
             .flat_map(|ch| {
@@ -53,6 +66,10 @@ impl Row {
 
     pub fn backspace(&mut self, at: usize) {
         self.content.remove(at-1);
+    }
+
+    pub fn insert_char(&mut self, at: usize, c: char) {
+        self.content.insert(at, c);
     }
 
     #[inline(always)]
@@ -208,16 +225,34 @@ impl Editor {
         self.modified = false;
         self.filename = Some(filename.to_owned());
         let file = try!(OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(filename));
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .open(filename));
         let input = BufReader::new(&file);
         self.rows.clear();
         for (at, line) in input.lines().enumerate() {
             let l = try!(line);
             self.rows.push(Row::new(at, &l));
         }
+        Ok(())
+    }
+
+    pub fn save_file(&mut self) -> io::Result<()> {
+        if !self.modified {
+            return Ok(());
+        }
+
+        let filename = self.filename.as_ref().expect("(not possible in current version) filename not specified");
+
+        let mut file = try!(OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .open(filename));
+        for row in &self.rows {
+            try!(writeln!(file, "{}", row.content));
+        }
+        self.modified = false;
         Ok(())
     }
 
@@ -372,5 +407,60 @@ impl Editor {
     }
 
     pub fn insert_char(&mut self, c: char) {
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+
+        if file_row >= self.rows.len() {
+            while self.rows.len() <= file_row {
+                self.rows.push(Row::empty());
+            }
+        }
+
+        self.rows[file_row].insert_char(file_col, c);
+        if self.right_edge() {
+            self.col_offset += 1;
+        } else {
+            self.cursor_x += 1;
+        }
+
+        self.modified = true;
+    }
+
+    pub fn newline(&mut self) {
+        let file_row = self.row_offset + self.cursor_y;
+        let mut file_col = self.col_offset + self.cursor_x;
+
+        use std::cmp::Ordering::*;
+        match file_row.cmp(&self.rows.len()) {
+            Greater => return,
+            Equal => {
+                self.rows.push(Row::empty());
+            },
+            Less => {
+                if file_col >= self.rows[file_row].content.len() {
+                    file_col = self.rows[file_row].content.len();
+                }
+
+                if file_col == 0 {
+                    self.rows.insert(file_row, Row::empty());
+                } else {
+                    // Split the current row in TWO!
+                    let content = self.rows[file_row].content.clone();
+                    let (prior_row, new_row) = content.split_at(file_col);
+                    self.rows.insert(file_row+1, Row::with_content(new_row));
+                    self.rows[file_row].content = prior_row.to_owned();
+                }
+            }
+        }
+
+        // Fix the cursor position
+        if self.bottom_edge() {
+            self.row_offset += 1;
+        } else {
+            self.cursor_y += 1;
+        }
+
+        self.cursor_x = 0;
+        self.col_offset = 0;
     }
 }
