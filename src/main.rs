@@ -92,7 +92,8 @@ fn main() {
                 unimplemented!()
             },
             Key::Backspace | Key::Ctrl('h') | Key::Delete => {
-                // TODO delete char
+                editor.backspace();
+                render!(editor, stdout);
             },
             Key::Ctrl('l') => {
                 let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");

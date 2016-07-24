@@ -47,6 +47,14 @@ impl Row {
             }).collect()
     }
 
+    pub fn push_str(&mut self, s: String) {
+        self.content.push_str(&s);
+    }
+
+    pub fn backspace(&mut self, at: usize) {
+        self.content.remove(at-1);
+    }
+
     #[inline(always)]
     pub fn column_exists(&self, col_idx: usize) -> bool {
         col_idx < self.content.len()
@@ -99,7 +107,7 @@ impl Editor {
             cursor_y: 0,
             row_offset: 0,
             col_offset: 0,
-            screen_rows: screen_rows-2,
+            screen_rows: screen_rows-3,
             screen_cols: screen_cols,
             rows: vec![],
             modified: false,
@@ -110,12 +118,12 @@ impl Editor {
     }
 
     pub fn set_screen_size(&mut self, screen_rows: usize, screen_cols: usize) {
-        self.screen_rows = screen_rows - 2;
+        self.screen_rows = screen_rows - 3;
         self.screen_cols = screen_cols;
     }
 
     pub fn render<W: Write>(&self, out: &mut W) -> io::Result<()> {
-        try!(write!(out, "{}{}{}", cursor::Hide, cursor::Goto(1, 1), clear::All));
+        try!(write!(out, "{}{}", cursor::Hide, cursor::Goto(1, 1)));
         // now we render the text, line by line
         for y in 0..self.screen_rows {
             let file_row = self.row_offset + y;
@@ -127,7 +135,7 @@ impl Editor {
                     let padding_str: String = iter::repeat(' ').take(padding-1).collect();
                     try!(write!(out, "~{}{}", padding_str, title));
                 } else {
-                    try!(write!(out, "~\r\n"));
+                    try!(write!(out, "~{}\r\n", clear::AfterCursor));
                 }
                 continue;
             }
@@ -154,10 +162,10 @@ impl Editor {
                     }
                 }
             }
-            try!(write!(out, "{}\r\n", color::Fg(color::White)));
+            try!(write!(out, "{}{}\r\n", color::Fg(color::White), clear::AfterCursor));
         }
         // Render status bar
-        try!(write!(out, "{}", style::Invert));
+        try!(write!(out, "{}{}", clear::AfterCursor, style::Invert));
         let modified_str = if self.modified {
             " (modified)"
         } else {
@@ -170,7 +178,7 @@ impl Editor {
         let lhs_status = format!("{}{} - {} lines", filename_str, modified_str, self.rows.len());
         let rhs_status = format!("{}/{}", self.row_offset+self.cursor_y+1, self.rows.len());
         let padding = self.screen_cols - lhs_status.len();
-        try!(write!(out, "{0}{1: >2$}", lhs_status, rhs_status, padding));
+        try!(write!(out, "{0}{1}{2: >3$}", clear::AfterCursor, lhs_status, rhs_status, padding));
         try!(write!(out, "{}\r\n", style::Reset));
         match self.status_message {
             Some(ref msg) => {
@@ -180,7 +188,19 @@ impl Editor {
         };
 
         // Put the cursor in the right spot.
-        try!(write!(out, "{}{}", cursor::Goto((self.cursor_y+1) as u16, self.cursor_x as u16), cursor::Show));
+        let mut cx = 1;
+        let file_row = self.row_offset + self.cursor_y;
+        if file_row < self.rows.len() {
+            for j in self.col_offset..(self.cursor_x + self.col_offset) {
+                if let Some(ch) = self.rows[file_row].content.chars().nth(j) {
+                    if ch == TAB {
+                        cx += 3-((cx)%4);
+                    }
+                    cx += 1;
+                }
+            }
+        }
+        try!(write!(out, "{}{}", cursor::Goto((self.cursor_y+1) as u16, cx as u16), cursor::Show));
         Ok(())
     }
 
@@ -237,7 +257,7 @@ impl Editor {
                         self.col_offset -= 1;
                     } else {
                         // Move to the end of the previous line
-                        if !self.top_edge() {
+                        if file_row > 0 {
                             self.cursor_y -= 1;
                             self.cursor_x = self.rows[file_row-1].content.len();
                             if self.cursor_x > self.screen_cols - 1 {
@@ -269,9 +289,11 @@ impl Editor {
                 }
             },
             Up => {
-                if self.top_edge() && self.row_offset > 0 {
-                    self.row_offset -= 1;
-                } else if !self.top_edge() {
+                if self.top_edge() {
+                    if self.row_offset > 0 {
+                        self.row_offset -= 1;
+                    }
+                } else {
                     self.cursor_y -= 1;
                 }
             },
@@ -311,5 +333,44 @@ impl Editor {
         for _ in 0..self.screen_rows {
             self.move_cursor(dir);
         }
+    }
+
+    pub fn backspace(&mut self) {
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+        if file_row >= self.rows.len() || (file_col == 0 && file_row == 0) {
+            return;
+        }
+        if file_col == 0 {
+            // Append to the prior row, then delete the current row
+            let content = self.rows[file_row].content.clone();
+            let prior_row_len = self.rows[file_row-1].content.len();
+            self.rows[file_row-1].push_str(content);
+            self.rows.remove(file_row);
+            if self.cursor_y == 0 {
+                self.row_offset -= 1;
+            } else {
+                self.cursor_y -= 1;
+            }
+            self.cursor_x = prior_row_len;
+            if self.cursor_x >= self.screen_cols {
+                let shift = (self.screen_cols - self.cursor_x) + 1;
+                self.cursor_x -= shift;
+                self.col_offset += shift;
+            }
+        } else {
+            // Just drop the char from the row
+            self.rows[file_row].backspace(file_col);
+            if self.left_edge() && self.col_offset > 0 {
+                self.col_offset -= 1;
+            } else if !self.left_edge() {
+                self.cursor_x -= 1;
+            }
+        }
+
+        self.modified = true;
+    }
+
+    pub fn insert_char(&mut self, c: char) {
     }
 }
