@@ -1,0 +1,9 @@
+[package]
+name = "mutxt"
+version = "0.1.0"
+authors = ["Nathan Moos <moosingin3space@gmail.com>"]
+
+[dependencies]
+nix = "0.6"
+termion = "1.0"
+bitflags = "0.7"
