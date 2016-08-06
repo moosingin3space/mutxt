@@ -240,17 +240,18 @@ impl Editor {
     }
 
     pub fn save_file(&mut self) -> io::Result<()> {
-        debug!("save_file");
         if !self.modified {
             return Ok(());
         }
+        debug!("save_file - {} rows", self.rows.len());
 
         let filename = self.filename.as_ref().expect("(not possible in current version) filename not specified");
 
         let mut file = try!(OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .open(filename));
+                            .write(true)
+                            .truncate(true)
+                            .create(true)
+                            .open(filename));
         for row in &self.rows {
             try!(writeln!(file, "{}", row.content));
         }
@@ -361,6 +362,23 @@ impl Editor {
         }
     }
 
+    pub fn cursor_to_start_of_line(&mut self) {
+        self.col_offset = 0;
+        self.cursor_x = 0;
+    }
+
+    pub fn cursor_to_end_of_line(&mut self) {
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+        let row_exists = file_row < self.rows.len();
+
+        if row_exists {
+            for _ in file_col..self.rows[file_row].content.len() {
+                self.move_cursor(CursorDirection::Right)
+            }
+        }
+    }
+
     pub fn page_cursor(&mut self, dir: CursorDirection) {
         if dir == CursorDirection::Up && !self.top_edge() {
             self.cursor_y = 0;
@@ -411,7 +429,6 @@ impl Editor {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        debug!("insert_char `{}`", c);
         let file_row = self.row_offset + self.cursor_y;
         let file_col = self.col_offset + self.cursor_x;
 

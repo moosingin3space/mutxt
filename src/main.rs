@@ -99,10 +99,12 @@ fn main() {
                 unimplemented!()
             },
             Key::Ctrl('a') | Key::Home => {
-                unimplemented!()
+                editor.cursor_to_start_of_line();
+                render!(editor, stdout);
             },
             Key::Ctrl('e') | Key::End => {
-                unimplemented!()
+                editor.cursor_to_end_of_line();
+                render!(editor, stdout);
             },
             Key::Ctrl('w') | Key::Ctrl(BACKSPACE) => {
                 unimplemented!()
