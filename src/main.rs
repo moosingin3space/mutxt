@@ -22,7 +22,7 @@ use termion::terminal_size;
 use nix::sys::signal;
 
 const HELP_MSG: &'static str = "HELP: CTRL-S to save the file, and CTRL-Q to quit.";
-const BACKSPACE: char = 8 as char;
+const BACKSPACE: char = '\x7F';
 #[allow(non_upper_case_globals)]
 static ShouldResizeWindow: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -106,10 +106,15 @@ fn main() {
                 editor.cursor_to_end_of_line();
                 render!(editor, stdout);
             },
-            Key::Ctrl('w') | Key::Ctrl(BACKSPACE) => {
-                unimplemented!()
+            Key::Ctrl('w') | Key::Ctrl('h') => {
+                editor.backspace_word();
+                render!(editor, stdout);
             },
-            Key::Backspace | Key::Ctrl('h') | Key::Delete => {
+            Key::Ctrl('u') => {
+                editor.backspace_to_start_of_line();
+                render!(editor, stdout);
+            },
+            Key::Backspace | Key::Delete => {
                 editor.backspace();
                 render!(editor, stdout);
             },

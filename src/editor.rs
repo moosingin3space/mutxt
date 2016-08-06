@@ -428,6 +428,40 @@ impl Editor {
         debug!("number of rows: {}", self.rows.len());
     }
 
+    pub fn backspace_word(&mut self) {
+        // Search backwards for the previous non-alphanumeric character
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+
+        if file_row < self.rows.len() {
+            let num_backspaces = {
+                let row = &self.rows[file_row];
+                let len = row.content.len();
+                // Find the index of the previous non-alphanumeric character
+                row.content.chars()
+                    .rev()
+                    .skip(len - file_col)
+                    .take_while(|c| c.is_alphanumeric())
+                    .count()
+            };
+            for _ in 0..num_backspaces {
+                self.backspace();
+            }
+        }
+    }
+
+    pub fn backspace_to_start_of_line(&mut self) {
+        // Simply delete from here to the beginning of the line
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+
+        if file_row < self.rows.len() {
+            for _ in 0..file_col {
+                self.backspace()
+            }
+        }
+    }
+
     pub fn insert_char(&mut self, c: char) {
         let file_row = self.row_offset + self.cursor_y;
         let file_col = self.col_offset + self.cursor_x;
