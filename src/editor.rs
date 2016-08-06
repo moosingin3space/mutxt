@@ -222,6 +222,7 @@ impl Editor {
     }
 
     pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
+        debug!("open_file {}", filename);
         self.modified = false;
         self.filename = Some(filename.to_owned());
         let file = try!(OpenOptions::new()
@@ -239,6 +240,7 @@ impl Editor {
     }
 
     pub fn save_file(&mut self) -> io::Result<()> {
+        debug!("save_file");
         if !self.modified {
             return Ok(());
         }
@@ -371,6 +373,7 @@ impl Editor {
     }
 
     pub fn backspace(&mut self) {
+        debug!("backspace");
         let file_row = self.row_offset + self.cursor_y;
         let file_col = self.col_offset + self.cursor_x;
         if file_row >= self.rows.len() || (file_col == 0 && file_row == 0) {
@@ -404,9 +407,11 @@ impl Editor {
         }
 
         self.modified = true;
+        debug!("number of rows: {}", self.rows.len());
     }
 
     pub fn insert_char(&mut self, c: char) {
+        debug!("insert_char `{}`", c);
         let file_row = self.row_offset + self.cursor_y;
         let file_col = self.col_offset + self.cursor_x;
 
@@ -427,6 +432,7 @@ impl Editor {
     }
 
     pub fn newline(&mut self) {
+        debug!("newline");
         let file_row = self.row_offset + self.cursor_y;
         let mut file_col = self.col_offset + self.cursor_x;
 
@@ -452,7 +458,6 @@ impl Editor {
                 }
             }
         }
-
         // Fix the cursor position
         if self.bottom_edge() {
             self.row_offset += 1;
@@ -462,5 +467,7 @@ impl Editor {
 
         self.cursor_x = 0;
         self.col_offset = 0;
+        self.modified = true;
+        debug!("number of rows: {}", self.rows.len());
     }
 }

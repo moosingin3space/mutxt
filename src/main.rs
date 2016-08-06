@@ -2,6 +2,9 @@ extern crate termion;
 extern crate nix;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 mod syntax_highlight;
 mod editor;
@@ -19,6 +22,7 @@ use termion::terminal_size;
 use nix::sys::signal;
 
 const HELP_MSG: &'static str = "HELP: CTRL-S to save the file, and CTRL-Q to quit.";
+const BACKSPACE: char = 8 as char;
 #[allow(non_upper_case_globals)]
 static ShouldResizeWindow: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -36,6 +40,8 @@ extern fn signal_handler(signo: i32) {
 }
 
 fn main() {
+    env_logger::init().expect("failed to initialize logging");
+
     let filename = env::args().nth(1).expect("Usage: mutxt <filename>");
     let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
     let stdin = io::stdin();
@@ -90,6 +96,15 @@ fn main() {
                 unimplemented!()
             },
             Key::Ctrl('f') => {
+                unimplemented!()
+            },
+            Key::Ctrl('a') | Key::Home => {
+                unimplemented!()
+            },
+            Key::Ctrl('e') | Key::End => {
+                unimplemented!()
+            },
+            Key::Ctrl('w') | Key::Ctrl(BACKSPACE) => {
                 unimplemented!()
             },
             Key::Backspace | Key::Ctrl('h') | Key::Delete => {
