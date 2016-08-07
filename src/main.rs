@@ -13,16 +13,18 @@ use std::env;
 use std::io;
 use std::io::{Write};
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use termion::terminal_size;
+use termion::{terminal_size, async_stdin};
 
 use nix::sys::signal;
 
 const HELP_MSG: &'static str = "HELP: CTRL-S to save the file, and CTRL-Q to quit.";
-const BACKSPACE: char = '\x7F';
+const EMPTY_STRING: &'static str = "";
 #[allow(non_upper_case_globals)]
 static ShouldResizeWindow: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -42,12 +44,13 @@ extern fn signal_handler(signo: i32) {
 fn main() {
     env_logger::init().expect("failed to initialize logging");
 
+    let status_gap = Duration::from_secs(10);
     let filename = env::args().nth(1).expect("Usage: mutxt <filename>");
     let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
-    let stdin = io::stdin();
+    let mut stdin_keys = async_stdin().keys();
     let mut stdout = io::stdout().into_raw_mode().expect("Could not put stdout into raw mode");
     let mut editor = editor::Editor::new(screen_rows as usize, screen_cols as usize);
-    editor.status_message = Some(HELP_MSG.to_owned());
+    editor.display_status(HELP_MSG);
     editor.open_file(&filename).expect("Could not open the file provided");
     render!(editor, stdout);
 
@@ -59,86 +62,85 @@ fn main() {
                               signal::SigSet::empty())).expect("failed to set signal handler");
     }
 
-    for c in stdin.keys() {
-        match c.unwrap() {
-            Key::Up => {
-                editor.move_cursor(editor::CursorDirection::Up);
-                render!(editor, stdout);
-            },
-            Key::Down => {
-                editor.move_cursor(editor::CursorDirection::Down);
-                render!(editor, stdout);
-            },
-            Key::Left => {
-                editor.move_cursor(editor::CursorDirection::Left);
-                render!(editor, stdout);
-            },
-            Key::Right => {
-                editor.move_cursor(editor::CursorDirection::Right);
-                render!(editor, stdout);
-            },
-            Key::PageUp => {
-                editor.page_cursor(editor::CursorDirection::Up);
-                render!(editor, stdout);
-            },
-            Key::PageDown => {
-                editor.page_cursor(editor::CursorDirection::Down);
-                render!(editor, stdout);
-            },
-            Key::Ctrl('s') => {
-                editor.save_file().expect("failed to save file");
-                render!(editor, stdout);
-            },
-            Key::Ctrl('o') => {
-                unimplemented!()
-            },
-            Key::Ctrl('p') => {
-                unimplemented!()
-            },
-            Key::Ctrl('f') => {
-                unimplemented!()
-            },
-            Key::Ctrl('a') | Key::Home => {
-                editor.cursor_to_start_of_line();
-                render!(editor, stdout);
-            },
-            Key::Ctrl('e') | Key::End => {
-                editor.cursor_to_end_of_line();
-                render!(editor, stdout);
-            },
-            Key::Ctrl('w') | Key::Ctrl('h') => {
-                editor.backspace_word();
-                render!(editor, stdout);
-            },
-            Key::Ctrl('u') => {
-                editor.backspace_to_start_of_line();
-                render!(editor, stdout);
-            },
-            Key::Backspace | Key::Delete => {
-                editor.backspace();
-                render!(editor, stdout);
-            },
-            Key::Ctrl('l') => {
-                let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
-                editor.set_screen_size(screen_rows as usize, screen_cols as usize);
-                render!(editor, stdout);
-            },
-            Key::Ctrl('q') => break,
-            Key::Char('\n') => {
-                editor.newline();
-                render!(editor, stdout);
-            },
-            Key::Char(c) => {
-                editor.insert_char(c);
-                render!(editor, stdout);
-            },
-            _ => {}
+    let mut last_time_of_status = Instant::now();
+    loop {
+        if let Some(c) = stdin_keys.next() {
+            match c.unwrap() {
+                Key::Up => {
+                    editor.move_cursor(editor::CursorDirection::Up);
+                },
+                Key::Down => {
+                    editor.move_cursor(editor::CursorDirection::Down);
+                },
+                Key::Left => {
+                    editor.move_cursor(editor::CursorDirection::Left);
+                },
+                Key::Right => {
+                    editor.move_cursor(editor::CursorDirection::Right);
+                },
+                Key::PageUp => {
+                    editor.page_cursor(editor::CursorDirection::Up);
+                },
+                Key::PageDown => {
+                    editor.page_cursor(editor::CursorDirection::Down);
+                },
+                Key::Ctrl('s') => {
+                    let filename = editor.filename.as_ref().unwrap().clone();
+                    let status_msg = match editor.save_file() {
+                        Ok(_) => format!("Successfully written to {}", filename),
+                        Err(_) => "Failed to save file".to_owned(),
+                    };
+                    editor.display_status(status_msg);
+                    last_time_of_status = Instant::now();
+                },
+                Key::Ctrl('o') => {
+                    unimplemented!()
+                },
+                Key::Ctrl('p') => {
+                    unimplemented!()
+                },
+                Key::Ctrl('f') => {
+                    unimplemented!()
+                },
+                Key::Ctrl('a') | Key::Home => {
+                    editor.cursor_to_start_of_line();
+                },
+                Key::Ctrl('e') | Key::End => {
+                    editor.cursor_to_end_of_line();
+                },
+                Key::Ctrl('w') | Key::Ctrl('h') => {
+                    editor.backspace_word();
+                },
+                Key::Ctrl('u') => {
+                    editor.backspace_to_start_of_line();
+                },
+                Key::Backspace | Key::Delete => {
+                    editor.backspace();
+                },
+                Key::Ctrl('l') => {
+                    let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
+                    editor.set_screen_size(screen_rows as usize, screen_cols as usize);
+                },
+                Key::Ctrl('q') => break,
+                Key::Char('\n') => {
+                    editor.newline();
+                },
+                Key::Char(c) => {
+                    editor.insert_char(c);
+                },
+                _ => {}
+            }
         }
         if ShouldResizeWindow.compare_and_swap(true, false, Ordering::Relaxed) {
             let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
             editor.set_screen_size(screen_rows as usize, screen_cols as usize);
-            render!(editor, stdout);
         }
+
+        thread::sleep(Duration::from_millis(50));
+        if Instant::now() - last_time_of_status > status_gap {
+            editor.display_status(EMPTY_STRING);
+        }
+        render!(editor, stdout);
     }
 
     write!(stdout, "{}{}", termion::clear::All, termion::cursor::Show).unwrap();

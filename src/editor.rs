@@ -102,9 +102,9 @@ pub struct Editor {
     /// Whether the file has been modified but not saved
     modified: bool,
     /// The current open file
-    filename: Option<String>,
+    pub filename: Option<String>,
     /// A message to display on the screen
-    pub status_message: Option<String>,
+    status_message: Option<String>,
     /// The syntax highlighting rule configured.
     syntax_highlight: Option<SyntaxHighlightRule>,
 }
@@ -460,6 +460,14 @@ impl Editor {
                 self.backspace()
             }
         }
+    }
+
+    pub fn empty_status(&mut self) {
+        self.status_message = None
+    }
+
+    pub fn display_status<S: AsRef<str>>(&mut self, status: S) {
+        self.status_message = Some(status.as_ref().to_owned());
     }
 
     pub fn insert_char(&mut self, c: char) {
