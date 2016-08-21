@@ -5,9 +5,11 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate clipboard;
 
 mod syntax_highlight;
 mod editor;
+mod clip;
 
 use std::env;
 use std::io;
@@ -50,6 +52,7 @@ fn main() {
     let mut stdin_keys = async_stdin().keys();
     let mut stdout = io::stdout().into_raw_mode().expect("Could not put stdout into raw mode");
     let mut editor = editor::Editor::new(screen_rows as usize, screen_cols as usize);
+    let mut clipbrd = clip::Clipboard::new();
     editor.display_status(HELP_MSG);
     editor.open_file(&filename).expect("Could not open the file provided");
     render!(editor, stdout);
@@ -101,6 +104,15 @@ fn main() {
                 },
                 Key::Ctrl('f') => {
                     unimplemented!()
+                },
+                Key::Ctrl('x') => {
+                    unimplemented!()
+                },
+                Key::Ctrl('c') => {
+                    unimplemented!()
+                },
+                Key::Ctrl('v') => {
+                    editor.insert_str(clipbrd.get());
                 },
                 Key::Ctrl('a') | Key::Home => {
                     editor.cursor_to_start_of_line();

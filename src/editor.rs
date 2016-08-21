@@ -470,6 +470,12 @@ impl Editor {
         self.status_message = Some(status.as_ref().to_owned());
     }
 
+    pub fn insert_str<S: AsRef<str>>(&mut self, text: S) {
+        for c in text.as_ref().chars() {
+            self.insert_char(c);
+        }
+    }
+
     pub fn insert_char(&mut self, c: char) {
         let file_row = self.row_offset + self.cursor_y;
         let file_col = self.col_offset + self.cursor_x;
