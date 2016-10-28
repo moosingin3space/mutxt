@@ -10,10 +10,11 @@ extern crate clipboard;
 mod syntax_highlight;
 mod editor;
 mod clip;
+mod keyboard;
 
 use std::env;
 use std::io;
-use std::io::{Write};
+use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -47,10 +48,13 @@ fn main() {
     env_logger::init().expect("failed to initialize logging");
 
     let status_gap = Duration::from_secs(10);
-    let filename = env::args().nth(1).expect("Usage: mutxt <filename>");
-    let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
-    let mut stdin_keys = async_stdin().keys();
-    let mut stdout = io::stdout().into_raw_mode().expect("Could not put stdout into raw mode");
+    let filename = env::args().nth(1)
+        .expect("Usage: mutxt <filename>");
+    let (screen_cols, screen_rows) = terminal_size()
+        .expect("Could not get the terminal size");
+    let mut stdin = keyboard::CommandReader::commands(async_stdin());
+    let mut stdout = io::stdout().into_raw_mode()
+        .expect("Could not put stdout into raw mode");
     let mut editor = editor::Editor::new(screen_rows as usize, screen_cols as usize);
     let mut clipbrd = clip::Clipboard::new();
     editor.display_status(HELP_MSG);
@@ -62,32 +66,40 @@ fn main() {
                           &signal::SigAction::new(
                               signal::SigHandler::Handler(signal_handler),
                               signal::SaFlags::empty(),
-                              signal::SigSet::empty())).expect("failed to set signal handler");
+                              signal::SigSet::empty()))
+            .expect("failed to set signal handler");
     }
 
     let mut last_time_of_status = Instant::now();
     loop {
-        if let Some(c) = stdin_keys.next() {
-            match c.unwrap() {
-                Key::Up => {
+        if let Some(command) = stdin.next() {
+            use keyboard::Command::*;
+            match command {
+                MoveUp => {
                     editor.move_cursor(editor::CursorDirection::Up);
                 },
-                Key::Down => {
+                MoveDown => {
                     editor.move_cursor(editor::CursorDirection::Down);
                 },
-                Key::Left => {
+                MoveLeft => {
                     editor.move_cursor(editor::CursorDirection::Left);
                 },
-                Key::Right => {
+                MoveRight => {
                     editor.move_cursor(editor::CursorDirection::Right);
                 },
-                Key::PageUp => {
+                MoveLeftWord => {
+                    editor.cursor_to_left_word();
+                },
+                MoveRightWord => {
+                    editor.cursor_to_right_word();
+                },
+                PageUp => {
                     editor.page_cursor(editor::CursorDirection::Up);
                 },
-                Key::PageDown => {
+                PageDown => {
                     editor.page_cursor(editor::CursorDirection::Down);
                 },
-                Key::Ctrl('s') => {
+                Save => {
                     let filename = editor.filename.as_ref().unwrap().clone();
                     let status_msg = match editor.save_file() {
                         Ok(_) => format!("Successfully written to {}", filename),
@@ -96,64 +108,64 @@ fn main() {
                     editor.display_status(status_msg);
                     last_time_of_status = Instant::now();
                 },
-                Key::Ctrl('o') => {
+                Open => {
                     unimplemented!()
                 },
-                Key::Ctrl('p') => {
+                Find => {
                     unimplemented!()
                 },
-                Key::Ctrl('f') => {
+                Cut => {
                     unimplemented!()
                 },
-                Key::Ctrl('x') => {
+                Copy => {
                     unimplemented!()
                 },
-                Key::Ctrl('c') => {
-                    unimplemented!()
-                },
-                Key::Ctrl('v') => {
+                Paste => {
                     editor.insert_str(clipbrd.get());
                 },
-                Key::Ctrl('a') | Key::Home => {
+                GoHome => {
                     editor.cursor_to_start_of_line();
                 },
-                Key::Ctrl('e') | Key::End => {
+                GoEnd => {
                     editor.cursor_to_end_of_line();
                 },
-                Key::Ctrl('w') | Key::Ctrl('h') => {
+                BackspaceWord => {
                     editor.backspace_word();
                 },
-                Key::Ctrl('u') => {
+                BackspaceLine => {
                     editor.backspace_to_start_of_line();
                 },
-                Key::Backspace | Key::Delete => {
+                Backspace => {
                     editor.backspace();
                 },
-                Key::Ctrl('l') => {
-                    let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
+                Refresh => {
+                    let (screen_cols, screen_rows) = terminal_size()
+                        .expect("Could not get the terminal size");
                     editor.set_screen_size(screen_rows as usize, screen_cols as usize);
                 },
-                Key::Ctrl('q') => break,
-                Key::Char('\n') => {
+                Quit => break,
+                Char('\n') => {
                     editor.newline();
                 },
-                Key::Char(c) => {
+                Char(c) => {
                     editor.insert_char(c);
                 },
                 _ => {}
             }
         }
         if ShouldResizeWindow.compare_and_swap(true, false, Ordering::Relaxed) {
-            let (screen_cols, screen_rows) = terminal_size().expect("Could not get the terminal size");
+            let (screen_cols, screen_rows) = terminal_size()
+                .expect("Could not get the terminal size");
             editor.set_screen_size(screen_rows as usize, screen_cols as usize);
         }
 
         thread::sleep(Duration::from_millis(50));
         if Instant::now() - last_time_of_status > status_gap {
-            editor.display_status(EMPTY_STRING);
+            editor.empty_status();
         }
         render!(editor, stdout);
     }
 
-    write!(stdout, "{}{}", termion::clear::All, termion::cursor::Show).unwrap();
+    write!(stdout, "{}{}{}", termion::cursor::Goto(1, 1),
+           termion::clear::All, termion::cursor::Show).unwrap();
 }

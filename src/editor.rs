@@ -379,6 +379,56 @@ impl Editor {
         }
     }
 
+    fn find_previous_non_alphanumeric_char_index(&self) -> Option<usize> {
+        // Search backwards for the previous non-alphanumeric character
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+
+        if file_row < self.rows.len() {
+            Some({
+                let row = &self.rows[file_row];
+                let len = row.content.len();
+                // Find the index of the previous non-alphanumeric character
+                row.content.chars()
+                    .rev()
+                    .skip(len - file_col)
+                    .take_while(|c| c.is_alphanumeric())
+                    .count()
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn cursor_to_left_word(&mut self) {
+        // Search backwards for the previous non-alphanumeric character
+        if let Some(num) = self.find_previous_non_alphanumeric_char_index() {
+            for _ in 0..(num+1) {
+                self.move_cursor(CursorDirection::Left);
+            }
+        }
+    }
+
+    pub fn cursor_to_right_word(&mut self) {
+        // Search forwards for the next non-alphanumeric character
+        let file_row = self.row_offset + self.cursor_y;
+        let file_col = self.col_offset + self.cursor_x;
+
+        if file_row < self.rows.len() {
+            let num = {
+                let row = &self.rows[file_row];
+                // Find the next index
+                row.content.chars()
+                    .skip(file_col+1)
+                    .take_while(|c| c.is_alphanumeric())
+                    .count()+1
+            };
+            for _ in 0..num {
+                self.move_cursor(CursorDirection::Right);
+            }
+        }
+    }
+
     pub fn page_cursor(&mut self, dir: CursorDirection) {
         if dir == CursorDirection::Up && !self.top_edge() {
             self.cursor_y = 0;
@@ -429,21 +479,7 @@ impl Editor {
     }
 
     pub fn backspace_word(&mut self) {
-        // Search backwards for the previous non-alphanumeric character
-        let file_row = self.row_offset + self.cursor_y;
-        let file_col = self.col_offset + self.cursor_x;
-
-        if file_row < self.rows.len() {
-            let num_backspaces = {
-                let row = &self.rows[file_row];
-                let len = row.content.len();
-                // Find the index of the previous non-alphanumeric character
-                row.content.chars()
-                    .rev()
-                    .skip(len - file_col)
-                    .take_while(|c| c.is_alphanumeric())
-                    .count()
-            };
+        if let Some(num_backspaces) = self.find_previous_non_alphanumeric_char_index() {
             for _ in 0..num_backspaces {
                 self.backspace();
             }
