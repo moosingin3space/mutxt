@@ -64,9 +64,9 @@ impl <R: Read> Iterator for CommandReader<R> {
                         }
                     }
                     match seq[0] {
-                        0x5B => {
+                        b'[' => {
                             // Handle ESC [ sequences
-                            if seq[1] >= 0x30 && seq[1] <= 0x39 {
+                            if seq[1] >= b'0' && seq[1] <= b'9' {
                                 // Extended escape, we need one more char
                                 loop {
                                     let nread = self.input.read(&mut seq[2..3])
@@ -75,11 +75,11 @@ impl <R: Read> Iterator for CommandReader<R> {
                                         break;
                                     }
                                 }
-                                if seq[2] == 0x7E {
+                                if seq[2] == b'~' {
                                     match seq[1] {
-                                        0x33 => return Some(Command::Backspace),
-                                        0x35 => return Some(Command::PageUp),
-                                        0x36 => return Some(Command::PageDown),
+                                        b'3' => return Some(Command::Backspace),
+                                        b'5' => return Some(Command::PageUp),
+                                        b'6' => return Some(Command::PageDown),
                                         c => {
                                             debug!("ignoring sequence ^[[{}~", c);
                                             return Some(Command::Ignore)
@@ -88,12 +88,12 @@ impl <R: Read> Iterator for CommandReader<R> {
                                 }
                             } else {
                                 match seq[1] {
-                                    0x41 => return Some(Command::MoveUp),
-                                    0x42 => return Some(Command::MoveDown),
-                                    0x43 => return Some(Command::MoveRight),
-                                    0x44 => return Some(Command::MoveLeft),
-                                    0x48 => return Some(Command::GoHome),
-                                    0x46 => return Some(Command::GoEnd),
+                                    b'A' => return Some(Command::MoveUp),
+                                    b'B' => return Some(Command::MoveDown),
+                                    b'C' => return Some(Command::MoveRight),
+                                    b'D' => return Some(Command::MoveLeft),
+                                    b'H' => return Some(Command::GoHome),
+                                    b'F' => return Some(Command::GoEnd),
                                     c => {
                                         debug!("ignoring sequence ^[[{}", c);
                                         return Some(Command::Ignore)
@@ -101,22 +101,22 @@ impl <R: Read> Iterator for CommandReader<R> {
                                 }
                             }
                         },
-                        0x4F => {
+                        b'O' => {
                             // Handle ESC O sequences
                             match seq[1] {
-                                0x48 => return Some(Command::GoHome),
-                                0x46 => return Some(Command::GoEnd),
+                                b'H' => return Some(Command::GoHome),
+                                b'F' => return Some(Command::GoEnd),
                                 c => {
                                     debug!("ignoring sequence ^[O{}", c);
                                     return Some(Command::Ignore)
                                 }
                             }
                         },
-                        0x35 => {
+                        b'5' => {
                             // Handle ESC 5 sequences
                             match seq[1] {
-                                0x44 => return Some(Command::MoveLeftWord),
-                                0x43 => return Some(Command::MoveRightWord),
+                                b'D' => return Some(Command::MoveLeftWord),
+                                b'C' => return Some(Command::MoveRightWord),
                                 c => {
                                     debug!("ignoring sequence ^[5{}", c);
                                     return Some(Command::Ignore)

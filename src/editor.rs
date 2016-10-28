@@ -3,20 +3,42 @@ use std::io::{Write};
 use std::iter;
 use std::io::{BufRead, BufReader};
 use std::fs::{File, OpenOptions};
-use syntax_highlight::{HighlightParams, HighlightType};
+use std::collections::{HashSet};
 use termion::{cursor, clear, color, style};
 
 const TAB: char = '\t';
 const SPACES_PER_TAB: usize = 4;
 const VERSION : &'static str = env!("CARGO_PKG_VERSION");
 
+bitflags! {
+    pub flags HighlightParams: u8 {
+        const HighlightStrings = (1 << 0),
+        const HighlightNumbers = (1 << 1),
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum HighlightType {
+    Normal,
+    NonPrint,
+    Comment,
+    Keyword,
+    String,
+    Number,
+    Selection,
+}
+
 /// A type defining elements of syntax
 pub struct SyntaxHighlightRule {
-    /// The keywords in the file
-    keywords: Vec<String>,
-    single_line_comment_start: Vec<String>,
+    /// The keywords of the language
+    keywords: HashSet<String>,
+    /// The start character sequence for a single-line comment
+    single_line_comment_start: HashSet<String>,
+    /// The start character sequence for a multi-line comment
     multi_line_comment_start: String,
+    /// The end character sequence for a multi-line comment
     multi_line_comment_end: String,
+    /// Flags specifying what elements of syntax should be highlighted
     params: HighlightParams,
 }
 
@@ -164,17 +186,31 @@ impl Editor {
                     len = self.screen_cols;
                 }
                 for (c, hl) in rendered_row.into_iter().skip(self.col_offset).take(len) {
-                    use syntax_highlight::HighlightType::*;
+                    // TODO use configurable colors
+                    use self::HighlightType::*;
                     match hl {
                         NonPrint => {
-                            unimplemented!();
+                            try!(write!(out, "{}{}{}", color::Fg(color::Reset),
+                                        color::Bg(color::Reset), c));
                         },
                         Normal => {
                             try!(write!(out, "{}{}", color::Fg(color::White), c));
                         },
-                        _ => {
-                            // TODO get colors and use them
-                            unimplemented!();
+                        Comment => {
+                            try!(write!(out, "{}{}", color::Fg(color::Cyan), c));
+                        },
+                        Keyword => {
+                            try!(write!(out, "{}{}", color::Fg(color::Magenta), c));
+                        },
+                        String => {
+                            try!(write!(out, "{}{}", color::Fg(color::Green), c));
+                        },
+                        Number => {
+                            try!(write!(out, "{}{}", color::Fg(color::Blue), c));
+                        },
+                        Selection => {
+                            try!(write!(out, "{}{}{}", color::Bg(color::LightBlack),
+                                        color::Fg(color::White), c));
                         }
                     }
                 }
@@ -217,7 +253,7 @@ impl Editor {
                 }
             }
         }
-        try!(write!(out, "{}{}", cursor::Goto((self.cursor_y+1) as u16, cx as u16), cursor::Show));
+        try!(write!(out, "{}{}", cursor::Goto(cx as u16, (self.cursor_y+1) as u16), cursor::Show));
         Ok(())
     }
 

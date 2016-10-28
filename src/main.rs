@@ -7,7 +7,6 @@ extern crate log;
 extern crate env_logger;
 extern crate clipboard;
 
-mod syntax_highlight;
 mod editor;
 mod clip;
 mod keyboard;
@@ -27,7 +26,6 @@ use termion::{terminal_size, async_stdin};
 use nix::sys::signal;
 
 const HELP_MSG: &'static str = "HELP: CTRL-S to save the file, and CTRL-Q to quit.";
-const EMPTY_STRING: &'static str = "";
 #[allow(non_upper_case_globals)]
 static ShouldResizeWindow: AtomicBool = ATOMIC_BOOL_INIT;
 
